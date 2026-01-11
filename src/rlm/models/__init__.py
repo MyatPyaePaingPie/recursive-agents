@@ -11,9 +11,13 @@ Example:
 
 from rlm.models.base import BaseLLM, LLMResponse
 from rlm.models.factory import create_llm
+from rlm.models.tiers import ModelSpec, ModelTier, ModelTiers
 
 __all__ = [
     "BaseLLM",
     "LLMResponse",
     "create_llm",
+    "ModelTiers",
+    "ModelTier",
+    "ModelSpec",
 ]

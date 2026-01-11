@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RLM Dashboard</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0e27;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px 20px;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        h1 {
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #f0f0f0;
+            font-size: 1.1em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+        }
+
+        .tab {
+            padding: 15px 30px;
+            background: #1a1f3a;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 1em;
+            border-radius: 10px 10px 0 0;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: #2a3f5f;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .tab:hover {
+            background: #25304d;
+            color: #e0e0e0;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: #1a1f3a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 1.3em;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .test-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .test-item {
+            background: #25304d;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .test-item::after {
+            content: "▶ Click to run";
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.8em;
+            color: #667eea;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .test-item:hover {
+            background: #2a3f5f;
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .test-item:hover::after {
+            opacity: 1;
+        }
+
+        .test-item.running {
+            border-left-color: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+
+        .test-item.passed {
+            border-left-color: #10b981;
+        }
+
+        .test-item.failed {
+            border-left-color: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .test-name {
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 5px;
+        }
+
+        .test-category {
+            font-size: 0.85em;
+            color: #999;
+        }
+
+        .event-log {
+            background: #0d1117;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: 600px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .event-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-left: 3px solid #667eea;
+            background: #161b22;
+            border-radius: 4px;
+        }
+
+        /* Event category colors */
+        .event-item.lifecycle { border-left-color: #10b981; }
+        .event-item.context { border-left-color: #3b82f6; }
+        .event-item.llm { border-left-color: #f59e0b; }
+        .event-item.code { border-left-color: #a855f7; }
+        .event-item.execution { border-left-color: #06b6d4; }
+        .event-item.recursion { border-left-color: #6366f1; }
+        .event-item.aggregation { border-left-color: #22c55e; }
+        .event-item.error { border-left-color: #ef4444; background: #2d1f1f; }
+
+        .event-header {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .event-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-right: 8px;
+        }
+
+        .event-type-badge.lifecycle { background: #10b981; color: #0a0e27; }
+        .event-type-badge.context { background: #3b82f6; color: white; }
+        .event-type-badge.llm { background: #f59e0b; color: #0a0e27; }
+        .event-type-badge.code { background: #a855f7; color: white; }
+        .event-type-badge.execution { background: #06b6d4; color: #0a0e27; }
+        .event-type-badge.recursion { background: #6366f1; color: white; }
+        .event-type-badge.aggregation { background: #22c55e; color: #0a0e27; }
+        .event-type-badge.error { background: #ef4444; color: white; }
+
+        .event-time {
+            color: #6e7681;
+            font-size: 0.85em;
+        }
+
+        .event-data {
+            margin-top: 8px;
+            padding: 8px;
+            background: #0d1117;
+            border-radius: 4px;
+            color: #79c0ff;
+        }
+
+        .code-block {
+            background: #0d1117;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            color: #e6edf3;
+            border: 1px solid #30363d;
+        }
+
+        .model-info {
+            display: flex;
+            gap: 20px;
+            padding: 15px;
+            background: #25304d;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .model-card {
+            flex: 1;
+            padding: 12px;
+            background: #1a1f3a;
+            border-radius: 6px;
+        }
+
+        .model-card-title {
+            font-size: 0.85em;
+            color: #999;
+            margin-bottom: 5px;
+        }
+
+        .model-card-name {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .model-card-desc {
+            font-size: 0.8em;
+            color: #6e7681;
+            margin-top: 4px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-running {
+            background: #f59e0b;
+            color: #0a0e27;
+        }
+
+        .status-passed {
+            background: #10b981;
+            color: #0a0e27;
+        }
+
+        .status-failed {
+            background: #ef4444;
+            color: white;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group label {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        input[type="text"], textarea, select {
+            background: #25304d;
+            border: 1px solid #3a4f6f;
+            color: #e0e0e0;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 1em;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #25304d;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .recursion-tree {
+            font-family: 'Courier New', monospace;
+            background: #0d1117;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+
+        .tree-node {
+            margin: 5px 0;
+            padding: 8px;
+            background: #161b22;
+            border-left: 2px solid #667eea;
+            border-radius: 4px;
+        }
+
+        .tree-indent {
+            display: inline-block;
+            width: 30px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #444;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1f3a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 RLM Dashboard</h1>
+            <p class="subtitle">Recursive Language Models - Testing & Visualization</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('tests')">🧪 Tests</button>
+            <button class="tab" onclick="switchTab('execution')">⚡ Live Execution</button>
+            <button class="tab" onclick="switchTab('examples')">📝 Examples</button>
+        </div>
+
+        <!-- Tests Tab -->
+        <div id="tests-content" class="tab-content active">
+            <div class="card">
+                <div class="card-title">Test Suite</div>
+                <div class="controls">
+                    <button class="btn" onclick="runAllTests()">Run All Tests</button>
+                    <button class="btn btn-secondary" onclick="loadTests()">Refresh</button>
+                </div>
+                <div id="test-list" class="test-list">
+                    <div>Loading tests...</div>
+                </div>
+            </div>
+
+            <div class="card" id="test-output-card" style="display: none;">
+                <div class="card-title">Test Output</div>
+                <div class="event-log" id="test-output"></div>
+            </div>
+        </div>
+
+        <!-- Live Execution Tab -->
+        <div id="execution-content" class="tab-content">
+            <div class="card">
+                <div class="card-title">Run Transparent Demo</div>
+                <div class="controls">
+                    <div class="input-group" style="flex: 1;">
+                        <label>Query:</label>
+                        <input type="text" id="query" value="What are the main components of an RLM system?" style="width: 100%;">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Context:</label>
+                    <textarea id="context" style="width: 100%;">Recursive Language Models (RLMs) consist of three main components: 1) The Context Manager which handles large documents by chunking them appropriately. 2) The Code Generation layer which creates Python code to examine and process the context. 3) The Execution Sandbox which safely runs generated code with security restrictions.</textarea>
+                </div>
+                <div class="controls">
+                    <div class="input-group">
+                        <label>Provider:</label>
+                        <select id="provider">
+                            <option value="ollama" selected>Ollama (Local)</option>
+                            <option value="groq">Groq (Cloud)</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>&nbsp;</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="use-tiers" checked>
+                            <label for="use-tiers" style="color: #e0e0e0; cursor: pointer;">Use Model Tiers</label>
+                        </div>
+                    </div>
+                    <button class="btn" onclick="runTransparentDemo()">▶️ Run Demo</button>
+                    <button class="btn btn-secondary" onclick="clearEvents()">Clear Events</button>
+                </div>
+
+                <!-- Model Info Display -->
+                <div id="model-info" class="model-info" style="display: none;">
+                    <div class="model-card">
+                        <div class="model-card-title">Code Generation (Lightweight)</div>
+                        <div class="model-card-name" id="code-model-name">-</div>
+                        <div class="model-card-desc" id="code-model-desc">-</div>
+                    </div>
+                    <div class="model-card">
+                        <div class="model-card-title">Reasoning (Heavyweight)</div>
+                        <div class="model-card-name" id="reasoning-model-name">-</div>
+                        <div class="model-card-desc" id="reasoning-model-desc">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats" id="stats" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-tokens">0</div>
+                    <div class="stat-label">Total Tokens</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-time">0s</div>
+                    <div class="stat-label">Execution Time</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-calls">0</div>
+                    <div class="stat-label">Recursive Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-events">0</div>
+                    <div class="stat-label">Events</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">⚡ Transparent Event Log <span id="event-count"></span></div>
+                <div class="event-log" id="event-log">
+                    <div style="color: #999; padding: 20px; text-align: center;">
+                        <div style="font-size: 2em; margin-bottom: 10px;">👁️</div>
+                        <div style="font-size: 1.1em; margin-bottom: 10px;">Full Transparency Mode</div>
+                        <div>Every RLM event will stream here in real-time:</div>
+                        <div style="margin-top: 10px; color: #667eea;">
+                            • Context loading<br>
+                            • Code generation<br>
+                            • Validation checks<br>
+                            • Code execution<br>
+                            • Recursion steps<br>
+                            • Final aggregation
+                        </div>
+                        <div style="margin-top: 15px; font-style: italic;">Click "▶️ Run Demo" above to start!</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="result-card" style="display: none;">
+                <div class="card-title">Final Result</div>
+                <div class="event-data" id="final-result"></div>
+            </div>
+        </div>
+
+        <!-- Examples Tab -->
+        <div id="examples-content" class="tab-content">
+            <div class="card">
+                <div class="card-title">Available Examples</div>
+                <div id="examples-list" class="test-list">
+                    <div>Loading examples...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let eventCount = 0;
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName + '-content').classList.add('active');
+
+            // Load data if needed
+            if (tabName === 'tests') loadTests();
+            if (tabName === 'examples') loadExamples();
+        }
+
+        // Load tests
+        async function loadTests() {
+            const response = await fetch('/api/tests');
+            const data = await response.json();
+            
+            const testList = document.getElementById('test-list');
+            testList.innerHTML = '';
+
+            data.tests.forEach(test => {
+                const item = document.createElement('div');
+                item.className = 'test-item';
+                item.innerHTML = `
+                    <div class="test-name">${test.name}</div>
+                    <div class="test-category">${test.category}</div>
+                `;
+                item.onclick = () => runTest(test.path);
+                testList.appendChild(item);
+            });
+        }
+
+        // Run single test
+        async function runTest(testPath) {
+            // Add visual feedback
+            const testItems = document.querySelectorAll('.test-item');
+            testItems.forEach(item => {
+                if (item.querySelector('.test-name').textContent === testPath.split('/').pop().replace('.py', '')) {
+                    item.classList.add('running');
+                    item.innerHTML += '<div class="loading" style="float: right; margin-top: -25px;"></div>';
+                }
+            });
+            
+            const response = await fetch('/api/tests/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({test_path: testPath})
+            });
+            
+            console.log('Test started:', testPath);
+        }
+
+        // Run all tests
+        async function runAllTests() {
+            const response = await fetch('/api/tests/run-all', {
+                method: 'POST'
+            });
+        }
+
+        // Load examples
+        async function loadExamples() {
+            const response = await fetch('/api/examples');
+            const data = await response.json();
+            
+            const examplesList = document.getElementById('examples-list');
+            examplesList.innerHTML = '';
+
+            data.examples.forEach(example => {
+                const item = document.createElement('div');
+                item.className = 'test-item';
+                item.innerHTML = `
+                    <div class="test-name">${example.name}</div>
+                    <div class="test-category">Example Script</div>
+                `;
+                examplesList.appendChild(item);
+            });
+        }
+
+        // Run transparent demo
+        function runTransparentDemo() {
+            const query = document.getElementById('query').value;
+            const context = document.getElementById('context').value;
+            const provider = document.getElementById('provider').value;
+            const useTiers = document.getElementById('use-tiers').checked;
+
+            document.getElementById('event-log').innerHTML = '<div style="color: #f59e0b; padding: 10px;">Starting execution...</div>';
+            document.getElementById('stats').style.display = 'none';
+            document.getElementById('result-card').style.display = 'none';
+            document.getElementById('model-info').style.display = 'none';
+            eventCount = 0;
+
+            socket.emit('run_transparent_demo', {
+                query: query,
+                context: context,
+                provider: provider,
+                use_tiers: useTiers
+            });
+        }
+
+        // Clear events
+        function clearEvents() {
+            document.getElementById('event-log').innerHTML = '';
+            document.getElementById('model-info').style.display = 'none';
+            document.getElementById('stats').style.display = 'none';
+            document.getElementById('result-card').style.display = 'none';
+            eventCount = 0;
+            document.getElementById('event-count').textContent = '';
+        }
+
+        // Socket.IO event handlers
+        socket.on('connected', (data) => {
+            console.log('Connected to server:', data);
+            loadTests();
+        });
+
+        socket.on('model_info', (info) => {
+            document.getElementById('model-info').style.display = 'flex';
+            document.getElementById('code-model-name').textContent = info.code_model;
+            document.getElementById('code-model-desc').textContent = info.code_description || 'Single model mode';
+            document.getElementById('reasoning-model-name').textContent = info.reasoning_model;
+            document.getElementById('reasoning-model-desc').textContent = info.reasoning_description || 'Single model mode';
+
+            if (!info.use_tiers) {
+                document.querySelector('#model-info .model-card:first-child .model-card-title').textContent = 'Model (Single Mode)';
+                document.querySelector('#model-info .model-card:last-child').style.display = 'none';
+            } else {
+                document.querySelector('#model-info .model-card:first-child .model-card-title').textContent = 'Code Generation (Lightweight)';
+                document.querySelector('#model-info .model-card:last-child').style.display = 'block';
+            }
+        });
+
+        socket.on('rlm_event', (event) => {
+            eventCount++;
+            document.getElementById('event-count').textContent = `(${eventCount} events)`;
+            document.getElementById('stat-events').textContent = eventCount;
+
+            const eventLog = document.getElementById('event-log');
+
+            // Clear the "starting" message on first event
+            if (eventCount === 1) {
+                eventLog.innerHTML = '';
+            }
+
+            const eventItem = document.createElement('div');
+            eventItem.className = `event-item ${event.category || ''}`;
+
+            const indent = '&nbsp;&nbsp;'.repeat(event.depth);
+            const time = new Date(event.timestamp).toLocaleTimeString();
+            const duration = event.duration_ms ? ` (${event.duration_ms.toFixed(1)}ms)` : '';
+
+            // Build event data display
+            let dataHtml = '';
+            if (event.data && Object.keys(event.data).length > 0) {
+                // Special handling for code
+                if (event.data.code) {
+                    dataHtml = `<div class="code-block">${escapeHtml(event.data.code)}</div>`;
+                } else if (event.data.response_preview) {
+                    dataHtml = `<div class="event-data"><strong>Response:</strong> ${escapeHtml(event.data.response_preview)}</div>`;
+                } else if (event.data.query) {
+                    dataHtml = `<div class="event-data"><strong>Query:</strong> ${escapeHtml(event.data.query)}</div>`;
+                } else if (event.data.error) {
+                    dataHtml = `<div class="event-data" style="color: #ef4444;"><strong>Error:</strong> ${escapeHtml(event.data.error)}</div>`;
+                } else {
+                    // Show key details
+                    const details = [];
+                    for (const [key, value] of Object.entries(event.data)) {
+                        if (value !== null && value !== undefined && key !== 'traceback') {
+                            const displayValue = typeof value === 'string' ? value.substring(0, 100) : JSON.stringify(value);
+                            details.push(`<strong>${key}:</strong> ${escapeHtml(String(displayValue))}`);
+                        }
+                    }
+                    if (details.length > 0) {
+                        dataHtml = `<div class="event-data">${details.join('<br>')}</div>`;
+                    }
+                }
+            }
+
+            eventItem.innerHTML = `
+                <div class="event-header">
+                    ${indent}<span class="event-type-badge ${event.category || ''}">${event.type}</span>${duration}
+                </div>
+                <div class="event-time">${time} | Depth: ${event.depth}</div>
+                ${dataHtml}
+            `;
+
+            eventLog.appendChild(eventItem);
+            eventLog.scrollTop = eventLog.scrollHeight;
+        });
+
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        socket.on('demo_complete', (data) => {
+            document.getElementById('stats').style.display = 'grid';
+            document.getElementById('stat-tokens').textContent = data.total_tokens.toLocaleString();
+            document.getElementById('stat-time').textContent = data.execution_time.toFixed(2) + 's';
+            document.getElementById('stat-calls').textContent = data.num_recursive_calls;
+
+            document.getElementById('result-card').style.display = 'block';
+            document.getElementById('final-result').textContent = data.answer;
+
+            // Show success message in event log
+            const eventLog = document.getElementById('event-log');
+            const completeItem = document.createElement('div');
+            completeItem.className = 'event-item lifecycle';
+            completeItem.innerHTML = `
+                <div class="event-header">
+                    <span class="event-type-badge lifecycle">COMPLETE</span>
+                </div>
+                <div class="event-data" style="color: #10b981;">
+                    <strong>Execution completed successfully!</strong><br>
+                    Total tokens: ${data.total_tokens.toLocaleString()}<br>
+                    Time: ${data.execution_time.toFixed(2)}s<br>
+                    Recursive calls: ${data.num_recursive_calls}
+                </div>
+            `;
+            eventLog.appendChild(completeItem);
+            eventLog.scrollTop = eventLog.scrollHeight;
+        });
+
+        socket.on('demo_error', (data) => {
+            const eventLog = document.getElementById('event-log');
+            const errorItem = document.createElement('div');
+            errorItem.className = 'event-item error';
+            errorItem.innerHTML = `
+                <div class="event-header">
+                    <span class="event-type-badge error">ERROR</span>
+                </div>
+                <div class="event-data" style="color: #ef4444;">
+                    <strong>Execution failed:</strong> ${escapeHtml(data.error)}
+                    ${data.traceback ? `<pre style="margin-top: 10px; font-size: 0.8em; color: #999;">${escapeHtml(data.traceback)}</pre>` : ''}
+                </div>
+            `;
+            eventLog.appendChild(errorItem);
+            eventLog.scrollTop = eventLog.scrollHeight;
+        });
+
+        socket.on('test_result', (data) => {
+            // Update test item status
+            const testItems = document.querySelectorAll('.test-item');
+            testItems.forEach(item => {
+                const testName = item.querySelector('.test-name').textContent;
+                if (data.test_path.includes(testName)) {
+                    item.classList.remove('running');
+                    item.classList.add(data.passed ? 'passed' : 'failed');
+                    // Remove loading spinner
+                    const spinner = item.querySelector('.loading');
+                    if (spinner) spinner.remove();
+                }
+            });
+            
+            // Show detailed output
+            document.getElementById('test-output-card').style.display = 'block';
+            const output = document.getElementById('test-output');
+            output.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <div class="status-badge ${data.passed ? 'status-passed' : 'status-failed'}" style="font-size: 1.1em;">
+                        ${data.passed ? '✓ PASSED' : '✗ FAILED'}
+                    </div>
+                    <span style="margin-left: 15px; color: #999;">Test: ${data.test_path}</span>
+                </div>
+                <pre style="margin-top: 15px; color: #e0e0e0; white-space: pre-wrap;">${data.stdout}</pre>
+                ${data.stderr ? `<pre style="color: #ef4444; margin-top: 10px; white-space: pre-wrap;">${data.stderr}</pre>` : ''}
+            `;
+            output.scrollTop = 0;
+        });
+
+        // Initialize on load
+        window.onload = () => {
+            loadTests();
+        };
+    </script>
+</body>
+</html>
+

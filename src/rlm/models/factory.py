@@ -9,11 +9,31 @@ Example:
     >>> llm = create_llm("groq", api_key="...", model="llama-3.1-8b-instant")
 """
 
+import os
+
 from rlm.exceptions import ConfigurationError
 from rlm.models.base import BaseLLM
 from rlm.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# Environment variable names for each provider
+API_KEY_ENV_VARS = {
+    "groq": "GROQ_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
+
+
+def _get_api_key(provider: str, api_key: str | None) -> str | None:
+    """Get API key from parameter or environment variable."""
+    if api_key:
+        return api_key
+    env_var = API_KEY_ENV_VARS.get(provider)
+    if env_var:
+        return os.environ.get(env_var)
+    return None
 
 
 def create_llm(
@@ -54,7 +74,11 @@ def create_llm(
         >>> llm = create_llm("openai", api_key="sk-...", model="gpt-4")
     """
     provider = provider.lower()
-    logger.info(f"Creating LLM: provider={provider}, model={model}")
+
+    # Auto-resolve API key from environment if not provided
+    resolved_api_key = _get_api_key(provider, api_key)
+
+    logger.info(f"Creating LLM: provider={provider}, model={model}, has_api_key={bool(resolved_api_key)}")
 
     if provider == "ollama":
         from rlm.models.ollama_llm import OllamaLLM
@@ -67,7 +91,7 @@ def create_llm(
         )
 
     elif provider == "groq":
-        if not api_key:
+        if not resolved_api_key:
             raise ConfigurationError(
                 "Groq API key is required",
                 details={"provider": "groq", "hint": "Set GROQ_API_KEY environment variable"},
@@ -75,14 +99,14 @@ def create_llm(
         from rlm.models.groq_llm import GroqLLM
 
         return GroqLLM(
-            api_key=api_key,
-            model=model or "llama-3.1-8b-instant",
+            api_key=resolved_api_key,
+            model=model or "llama-3.3-70b-versatile",
             temperature=temperature,
             max_tokens=max_tokens,
         )
 
     elif provider == "openai":
-        if not api_key:
+        if not resolved_api_key:
             raise ConfigurationError(
                 "OpenAI API key is required",
                 details={"provider": "openai", "hint": "Set OPENAI_API_KEY environment variable"},
@@ -90,14 +114,14 @@ def create_llm(
         from rlm.models.openai_llm import OpenAILLM
 
         return OpenAILLM(
-            api_key=api_key,
+            api_key=resolved_api_key,
             model=model or "gpt-4",
             temperature=temperature,
             max_tokens=max_tokens,
         )
 
     elif provider == "anthropic":
-        if not api_key:
+        if not resolved_api_key:
             raise ConfigurationError(
                 "Anthropic API key is required",
                 details={
@@ -108,7 +132,7 @@ def create_llm(
         from rlm.models.anthropic_llm import AnthropicLLM
 
         return AnthropicLLM(
-            api_key=api_key,
+            api_key=resolved_api_key,
             model=model or "claude-3-sonnet-20240229",
             temperature=temperature,
             max_tokens=max_tokens,

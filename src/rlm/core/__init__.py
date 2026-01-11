@@ -15,10 +15,15 @@ Example:
 """
 
 from rlm.core.engine import RecursiveInferenceEngine
-from rlm.core.models import InferenceResult, RecursionNode
+from rlm.core.models import InferenceResult, ProcessingState, RecursionNode
+from rlm.core.transparent import Event, EventType, TransparentEngine
 
 __all__ = [
     "RecursiveInferenceEngine",
+    "TransparentEngine",
     "InferenceResult",
     "RecursionNode",
+    "ProcessingState",
+    "Event",
+    "EventType",
 ]
