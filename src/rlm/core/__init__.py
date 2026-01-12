@@ -1,29 +1,42 @@
 """Core recursive inference engine for the RLM system.
 
-This module contains the main RecursiveInferenceEngine that orchestrates
-the recursive processing of large contexts.
+This module contains the RLM engines:
+- RLMEngine: Paper-accurate engine with complexity detection (RECOMMENDED)
+- RecursiveInferenceEngine: Original implementation
+- TransparentEngine: Heavily instrumented version
 
-Example:
-    >>> from rlm.core import RecursiveInferenceEngine
+Example (Paper-accurate):
+    >>> from rlm.core import RLMEngine
     >>> from rlm.models import create_llm
-    >>> from rlm.config import RLMConfig
     >>>
-    >>> config = RLMConfig()
-    >>> llm = create_llm("ollama")
-    >>> engine = RecursiveInferenceEngine(llm=llm, config=config)
-    >>> result = await engine.process("Summarize this", long_text)
+    >>> heavyweight = create_llm("anthropic", model="claude-3-5-sonnet")
+    >>> lightweight = create_llm("groq", model="llama-3.1-8b-instant")
+    >>> engine = RLMEngine(heavyweight_llm=heavyweight, lightweight_llm=lightweight)
+    >>> result = await engine.process("Summarize this book", long_text)
 """
 
 from rlm.core.engine import RecursiveInferenceEngine
 from rlm.core.models import InferenceResult, ProcessingState, RecursionNode
-from rlm.core.transparent import Event, EventType, TransparentEngine
+from rlm.core.rlm_engine import (
+    Event,
+    EventType,
+    RLMEngine,
+    RLMResult,
+    Trajectory,
+)
+from rlm.core.transparent import TransparentEngine
 
 __all__ = [
+    # Paper-accurate (recommended)
+    "RLMEngine",
+    "RLMResult",
+    "Trajectory",
+    "Event",
+    "EventType",
+    # Original implementations
     "RecursiveInferenceEngine",
     "TransparentEngine",
     "InferenceResult",
     "RecursionNode",
     "ProcessingState",
-    "Event",
-    "EventType",
 ]

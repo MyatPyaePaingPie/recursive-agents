@@ -179,11 +179,16 @@ class SandboxEnvironment:
                     mode="exec",
                 )
 
-                if byte_code.errors:
+                # Handle different RestrictedPython versions
+                # Older versions return object with .errors/.code, newer return code directly
+                if hasattr(byte_code, "errors") and byte_code.errors:
                     raise CodeExecutionError(
                         f"RestrictedPython compilation errors: {byte_code.errors}",
                         code=code,
                     )
+
+                # Get the actual code object
+                compiled_code = getattr(byte_code, "code", byte_code)
 
                 # Update globals with RestrictedPython guards
                 restricted_globals["__builtins__"] = safe_builtins.copy()
@@ -191,13 +196,15 @@ class SandboxEnvironment:
                 restricted_globals["__builtins__"]["_getiter_"] = iter
                 restricted_globals["__builtins__"]["_iter_unpack_sequence_"] = guarded_iter_unpack_sequence
                 restricted_globals["_getattr_"] = safer_getattr
+                # Allow dict/list writes (subscript assignment)
+                restricted_globals["_write_"] = lambda x: x
 
                 # Add safe builtins that might be missing
                 for name, value in SAFE_BUILTINS.items():
                     if name not in restricted_globals["__builtins__"]:
                         restricted_globals["__builtins__"][name] = value
 
-                exec(byte_code.code, restricted_globals)
+                exec(compiled_code, restricted_globals)
 
             except ImportError:
                 # RestrictedPython not available, use basic exec with validation

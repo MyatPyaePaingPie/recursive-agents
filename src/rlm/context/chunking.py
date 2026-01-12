@@ -108,7 +108,8 @@ class FixedSizeChunking(ChunkingStrategy):
             return []
 
         max_chars = max_chunk_tokens * CHARS_PER_TOKEN
-        overlap_chars = overlap_tokens * CHARS_PER_TOKEN
+        # Cap overlap at max_chars - 1 to ensure forward progress
+        overlap_chars = min(overlap_tokens * CHARS_PER_TOKEN, max_chars - 1)
 
         chunks = []
         chunk_id = 0
@@ -192,6 +193,67 @@ class SemanticChunking(ChunkingStrategy):
         for unit in units:
             unit = unit.strip()
             if not unit:
+                continue
+
+            unit_tokens = estimate_tokens(unit)
+
+            # If single unit exceeds max, split it further
+            if unit_tokens > max_chunk_tokens:
+                # Save current chunk if any
+                if current_text:
+                    end_pos = start_pos + len(current_text)
+                    chunk = ContextChunk(
+                        chunk_id=chunk_id,
+                        content=current_text,
+                        start_pos=start_pos,
+                        end_pos=end_pos,
+                        tokens=estimate_tokens(current_text),
+                    )
+                    chunks.append(chunk)
+                    chunk_id += 1
+                    start_pos = end_pos
+
+                # Split oversized unit by sentences or fixed size
+                if prefer_paragraphs:
+                    sub_units = self.SENTENCE_PATTERN.split(unit)
+                else:
+                    # Fall back to fixed-size splitting
+                    max_chars = max_chunk_tokens * CHARS_PER_TOKEN
+                    sub_units = [unit[i:i+max_chars] for i in range(0, len(unit), max_chars)]
+
+                for sub_unit in sub_units:
+                    sub_unit = sub_unit.strip()
+                    if not sub_unit:
+                        continue
+                    sub_tokens = estimate_tokens(sub_unit)
+                    if sub_tokens > max_chunk_tokens:
+                        # Still too big, force split by chars
+                        max_chars = max_chunk_tokens * CHARS_PER_TOKEN
+                        for i in range(0, len(sub_unit), max_chars):
+                            part = sub_unit[i:i+max_chars]
+                            chunk = ContextChunk(
+                                chunk_id=chunk_id,
+                                content=part,
+                                start_pos=start_pos,
+                                end_pos=start_pos + len(part),
+                                tokens=estimate_tokens(part),
+                            )
+                            chunks.append(chunk)
+                            chunk_id += 1
+                            start_pos += len(part)
+                    else:
+                        chunk = ContextChunk(
+                            chunk_id=chunk_id,
+                            content=sub_unit,
+                            start_pos=start_pos,
+                            end_pos=start_pos + len(sub_unit),
+                            tokens=sub_tokens,
+                        )
+                        chunks.append(chunk)
+                        chunk_id += 1
+                        start_pos += len(sub_unit)
+
+                current_text = ""
                 continue
 
             test_text = current_text + separator + unit if current_text else unit
