@@ -57,7 +57,7 @@ class TestExecutionConfig:
             ExecutionConfig(timeout=0)
 
         with pytest.raises(ValueError):
-            ExecutionConfig(timeout=100)  # > max
+            ExecutionConfig(timeout=700)  # > max (600)
 
 
 class TestRLMConfig:

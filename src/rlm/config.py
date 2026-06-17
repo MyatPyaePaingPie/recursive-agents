@@ -83,9 +83,9 @@ class ExecutionConfig(BaseSettings):
     )
 
     timeout: int = Field(
-        default=5,
+        default=300,  # 5 minutes - needed for RLM with many LLM calls
         ge=1,
-        le=60,
+        le=600,
         description="Execution timeout in seconds",
     )
     memory_limit_mb: int = Field(
