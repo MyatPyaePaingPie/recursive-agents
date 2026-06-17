@@ -67,7 +67,6 @@ docs/_build/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
 
 # Local data
 data/
